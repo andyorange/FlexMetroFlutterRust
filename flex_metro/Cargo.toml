@@ -1,0 +1,10 @@
+[package]
+name = "Flex_Metro"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "flexmetro"
+path = "test/test_metro_circles.rs"
+
+[dependencies]
