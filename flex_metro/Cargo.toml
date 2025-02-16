@@ -1,10 +1,21 @@
 [package]
-name = "Flex_Metro"
+name = "rust_lib_flex_metro"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "flexmetro"
-path = "test/test_metro_circles.rs"
+[lib]
+crate-type = ["cdylib", "staticlib"]
+path = "native/src/lib.rs"
 
 [dependencies]
+env_logger = "0.11.6"
+flutter_rust_bridge = "2.7.0"
+log = "0.4.22"
+#flutter_rust_bridge = "=2.6.0"
+once_cell = "1.20.2"
+serde = { version = "1.0.217", features = ["derive"] }
+#serde = { version = "1.0", features = ["derive"] }
+yaml-rust = "0.4.5"
+#serde_json = "1.0.130"
+#yaml_rust = "0.4.5"
+#once_cell = "1.20.2"

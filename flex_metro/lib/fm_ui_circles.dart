@@ -82,7 +82,7 @@ class AnimatedOpacity extends StatefulWidget {
   final Widget child;
 
   const AnimatedOpacity({
-    super.key, 
+    super.key,
     required this.opacity,
     required this.duration,
     required this.child,

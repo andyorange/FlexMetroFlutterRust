@@ -2,11 +2,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use flet::{Page, UserControl, Stack, colors};
 
-enum FMTickPositions {
-    T_none,
-    T_section,
-    T_rest,
-}
 
 struct FMSectionTimer {
     tick_end_callback: Arc<Mutex<Option<Box<dyn Fn() -> ()>>>>,
