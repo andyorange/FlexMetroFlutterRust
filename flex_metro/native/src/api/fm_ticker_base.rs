@@ -230,17 +230,6 @@ impl MusicalTiming {
         }
     }
 
-    /// Extract subbeat durations from a bar element
-    #[allow(dead_code)]
-    fn extract_subbeats(&self, bar: &FMBarElement) -> Result<Vec<i32>, String> {
-        match &bar.sub_beats {
-            crate::api::fm_bar_element::BarBeatData::Int(subbeats) => Ok(subbeats.clone()),
-            crate::api::fm_bar_element::BarBeatData::Float(subbeats) => {
-                Ok(subbeats.iter().map(|&sb| sb as i32).collect())
-            }
-        }
-    }
-
     /// Calculate total beat units for tempo progression calculation
     #[allow(dead_code)]
     fn calculate_total_beat_units(&self, beats: &[i32], subbeats: &[i32]) -> i32 {
@@ -773,6 +762,9 @@ impl FMTickerBase for FMCircleTicker {
     }
 }
 
+// Flutter-integrated ticker that sends beat events to Flutter UI
+// Temporarily disabled while focusing on Rust core functionality
+/*
 /// Flutter-integrated ticker that sends beat events to Flutter UI
 // #[flutter_rust_bridge::frb(opaque)]
 pub struct FlutterTicker {
@@ -867,6 +859,7 @@ impl FMTickerBase for FlutterTicker {
                   self.state, beat_event.beat_type));
     }
 }
+*/
 
 /*
 ## **Removed `.unwrap()` Calls and Improved Error Handling:**

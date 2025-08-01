@@ -1,5 +1,3 @@
-use crate::api::fm_base::{DEFAULT_BEATS, MetricKey};
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum BarBeatData {
     Int(Vec<i32>),
@@ -13,6 +11,7 @@ pub struct FMBarElement {
     pub nom_secs: f32,  // either nom/denom is set or nom_secs and denom=nom=0
     pub beats: BarBeatData,  // int for time signature based (nom, denom > 0) measure, float otherwise
     pub has_signature: bool,
+    pub sub_beats: BarBeatData, // int if signature based, float else
 }
 
 impl FMBarElement {
@@ -20,35 +19,25 @@ impl FMBarElement {
         assert!([0, 1, 2, 4, 8, 16, 32].contains(&denom));
 
         let has_signature = (denom > 0) && (nom > 0);
+        
+        let sub_beats = if has_signature {
+            BarBeatData::Int(vec![0])
+        } else {
+            BarBeatData::Float(vec![0.0])
+        };
 
         let beats = if has_signature {
             // Handle Option<Vec<i32>> properly
             match beats {
                 None => {
-                    // Use beat pattern from YAML configuration when None
-                    let key = MetricKey::Standard((nom, denom));
-                    let beat_pattern = match DEFAULT_BEATS.get(&key) {
-                        Some(pattern) => pattern.clone(),
-                        None => {
-                            eprintln!("Warning: No beat pattern found for {}/{}, using simple subdivision", nom, denom);
-                            // Fallback to simple even subdivision
-                            vec![1; nom as usize]
-                        }
-                    };
-                    BarBeatData::Int(beat_pattern)
+                    // Use simple even subdivision when None
+                    let simple_beats = vec![1; nom as usize];
+                    BarBeatData::Int(simple_beats)
                 },
                 Some(beats_vec) if beats_vec.is_empty() => {
-                    // Use beat pattern from YAML configuration when empty
-                    let key = MetricKey::Standard((nom, denom));
-                    let beat_pattern = match DEFAULT_BEATS.get(&key) {
-                        Some(pattern) => pattern.clone(),
-                        None => {
-                            eprintln!("Warning: No beat pattern found for {}/{}, using simple subdivision", nom, denom);
-                            // Fallback to simple even subdivision
-                            vec![1; nom as usize]
-                        }
-                    };
-                    BarBeatData::Int(beat_pattern)
+                    // Use simple even subdivision when empty
+                    let simple_beats = vec![1; nom as usize];
+                    BarBeatData::Int(simple_beats)
                 },
                 Some(beats_vec) => {
                     // Validate that beats sum equals nom
@@ -77,6 +66,14 @@ impl FMBarElement {
             nom_secs,
             beats,
             has_signature,
+            sub_beats,
+        }
+    }
+
+    pub fn add_sub_beat(&mut self, value: f32) {
+        match &mut self.sub_beats {
+            BarBeatData::Int(vec) => vec.push(value as i32),
+            BarBeatData::Float(vec) => vec.push(value),
         }
     }
 }
@@ -88,7 +85,8 @@ mod tests {
     #[test]
     fn test_fm_bar_element_creation() {
         let beats = vec![1, 2, 1];  // Sum = 4, matches nom
-        let bar_element = FMBarElement::new(4, 4, 0.0, Some(beats));
+        let mut bar_element = FMBarElement::new(4, 4, 0.0, Some(beats));
+        bar_element.add_sub_beat(1.5);
         
         assert_eq!(bar_element.nom, 4);
         assert_eq!(bar_element.denom, 4);

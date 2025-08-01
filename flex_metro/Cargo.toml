@@ -8,12 +8,13 @@ crate-type = ["cdylib", "staticlib"]
 path = "native/src/lib.rs"
 
 [dependencies]
-chrono = { version = "0.4.41", features = ["default"] }
+chrono = "0.4"
 env_logger = "0.11.6"
-flutter_rust_bridge = "2.7.0"
+flutter_rust_bridge = "2.11.0"
 log = "0.4.22"
 #flutter_rust_bridge = "=2.6.0"
 once_cell = "1.20.2"
+regex = "1.10.0"
 serde = { version = "1.0.217", features = ["derive"] }
 #serde = { version = "1.0", features = ["derive"] }
 yaml-rust = "0.4.5"

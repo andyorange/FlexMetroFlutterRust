@@ -1,4 +1,5 @@
-pub mod simple;
+// Temporarily disable Flutter bridge modules until we work on Flutter interface
+// pub mod simple;
 pub mod fm_base;
 pub mod fm_ticker_base;       // Core timer functionality
 pub mod fm_bar_element;       // Bar element structures  

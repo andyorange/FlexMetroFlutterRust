@@ -1,5 +1,9 @@
 pub mod api;
 
+// Test modules
+#[cfg(test)]
+pub mod realtime_test;
+
 // Re-export types for FRB
 pub use chrono::TimeDelta;
 pub use std::error::Error;
