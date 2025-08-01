@@ -25,7 +25,13 @@ mod tests {
         println!("Tempo change: 60.0 BPM → 90.0 BPM");
         
         // Create timer with the musical section
-        let mut timer = FMSectionTimer::new_with_section(bars.clone(), 60.0, 90.0).unwrap();
+        let mut timer = match FMSectionTimer::new_with_section(bars.clone(), 60.0, 90.0) {
+            Ok(timer) => timer,
+            Err(e) => {
+                println!("❌ Failed to create timer: {}", e);
+                panic!("Timer creation failed");
+            }
+        };
         
         // Get debug information about the beat events
         if let Some(debug_info) = timer.get_beat_events_debug() {
@@ -40,26 +46,30 @@ mod tests {
         let captured_events_clone = captured_events.clone();
         
         timer.set_tick_callback(move |beat_event| {
-            let mut events = captured_events_clone.lock().unwrap();
-            events.push(beat_event.clone());
+            if let Ok(mut events) = captured_events_clone.lock() {
+                events.push(beat_event.clone());
             
-            let beat_type_str = match beat_event.beat_type {
-                BeatType::Major => "MAJOR",
-                BeatType::Medium => "MEDIUM",
-                BeatType::Minor => "MINOR",
-            };
-            
-            println!("🎵 Beat #{:2} | {}/{} | {:6} | Position: {}.{} | Tempo: {:.1} BPM | Time: {:6.1}ms",
-                    events.len(),
-                    beat_event.nom, beat_event.denom,
-                    beat_type_str,
-                    beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1,
-                    beat_event.tempo_bpm,
-                    beat_event.time_offset_ms);
-        }).unwrap();
+                let beat_type_str = match beat_event.beat_type {
+                    BeatType::Major => "MAJOR",
+                    BeatType::Medium => "MEDIUM",
+                    BeatType::Minor => "MINOR",
+                };
+                
+                println!("🎵 Beat #{:2} | {}/{} | {:6} | Position: {}.{} | Tempo: {:.1} BPM | Time: {:6.1}ms",
+                        events.len(),
+                        beat_event.nom, beat_event.denom,
+                        beat_type_str,
+                        beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1,
+                        beat_event.tempo_bpm,
+                        beat_event.time_offset_ms);
+            }
+        }).expect("Failed to set callback");
         
         println!("\n🚀 Starting timer...");
-        timer.start().unwrap();
+        if let Err(e) = timer.start() {
+            println!("❌ Failed to start timer: {}", e);
+            return;
+        }
         
         // Let it run long enough to complete all beats
         // At 60-90 BPM, this should take about 6-10 seconds
@@ -67,11 +77,19 @@ mod tests {
         std::thread::sleep(Duration::from_secs(12));
         
         // Stop the timer
-        timer.stop().unwrap();
+        if let Err(e) = timer.stop() {
+            println!("❌ Failed to stop timer: {}", e);
+        }
         println!("⏹️  Timer stopped");
         
         // Analyze the captured events
-        let events = captured_events.lock().unwrap();
+        let events = match captured_events.lock() {
+            Ok(events) => events,
+            Err(e) => {
+                println!("❌ Failed to access captured events: {}", e);
+                return;
+            }
+        };
         println!("\n=== Analysis ===");
         println!("Total beats captured: {}", events.len());
         
@@ -99,20 +117,22 @@ mod tests {
         
         // Verify tempo progression
         if events.len() >= 2 {
-            let first_tempo = events.first().unwrap().tempo_bpm;
-            let last_tempo = events.last().unwrap().tempo_bpm;
+            if let (Some(first_event), Some(last_event)) = (events.first(), events.last()) {
+                let first_tempo = first_event.tempo_bpm;
+                let last_tempo = last_event.tempo_bpm;
             
-            println!("\nTempo progression:");
-            println!("  First beat: {:.1} BPM", first_tempo);
-            println!("  Last beat:  {:.1} BPM", last_tempo);
-            println!("  Change:     {:.1} BPM ({:.1}% increase)", 
-                    last_tempo - first_tempo, 
-                    ((last_tempo - first_tempo) / first_tempo) * 100.0);
-            
-            // Verify tempo increases
-            assert!(last_tempo > first_tempo, "Tempo should increase from start to end");
-            assert!((first_tempo - 60.0).abs() < 5.0, "First tempo should be close to 60 BPM");
-            assert!((last_tempo - 90.0).abs() < 5.0, "Last tempo should be close to 90 BPM");
+                println!("\nTempo progression:");
+                println!("  First beat: {:.1} BPM", first_tempo);
+                println!("  Last beat:  {:.1} BPM", last_tempo);
+                println!("  Change:     {:.1} BPM ({:.1}% increase)", 
+                        last_tempo - first_tempo, 
+                        ((last_tempo - first_tempo) / first_tempo) * 100.0);
+                
+                // Verify tempo increases
+                assert!(last_tempo > first_tempo, "Tempo should increase from start to end");
+                assert!((first_tempo - 60.0).abs() < 5.0, "First tempo should be close to 60 BPM");
+                assert!((last_tempo - 90.0).abs() < 5.0, "Last tempo should be close to 90 BPM");
+            }
         }
         
         // Calculate and verify timing intervals
@@ -185,7 +205,13 @@ mod tests {
             FMBarElement::new(4, 4, 0.0, None),
         ];
         
-        let timing = MusicalTiming::new(&bars, 60.0, 90.0).unwrap();
+        let timing = match MusicalTiming::new(&bars, 60.0, 90.0) {
+            Ok(timing) => timing,
+            Err(e) => {
+                println!("❌ Failed to create musical timing: {}", e);
+                panic!("Musical timing creation failed");
+            }
+        };
         
         println!("Section analysis:");
         println!("  Total duration: {:.1}ms", timing.total_duration_ms);

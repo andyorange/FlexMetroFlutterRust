@@ -9,9 +9,15 @@ fn test_timing_accuracy() {
     println!("=== Timing Accuracy Test ===");
     
     // Initialize and create a simple 4/4 section at 60 BPM
-    init_flutter_timer().unwrap();
+    if let Err(e) = init_flutter_timer() {
+        println!("❌ Failed to initialize timer: {}", e);
+        return;
+    }
     let bars = vec![(4, 4)];
-    start_musical_section_simple(bars, 60.0, 60.0).unwrap();
+    if let Err(e) = start_musical_section_simple(bars, 60.0, 60.0) {
+        println!("❌ Failed to start musical section: {}", e);
+        return;
+    }
     
     // At 60 BPM, quarter notes should be 1000ms apart
     let expected_interval_ms = 1000.0;

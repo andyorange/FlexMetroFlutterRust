@@ -545,8 +545,11 @@ pub enum FMTickPositions {
 pub trait AsyncTimer {
     fn start(&mut self) -> Result<(), String>;
     fn stop(&mut self) -> Result<(), String>;
+    fn pause(&mut self) -> Result<(), String>;
+    fn resume(&mut self) -> Result<(), String>;
     fn set_interval(&mut self, duration: std::time::Duration);  // Keep using Duration internally
     fn is_running(&self) -> bool;
+    fn is_paused(&self) -> bool;
 }
 
 // FMSectionTimer struct that inherits from async timer functionality
@@ -557,8 +560,11 @@ pub struct FMSectionTimer {
     // Timer state and control
     interval_duration: Duration,
     is_running: bool,
+    is_paused: bool,
     timer_handle: Option<thread::JoinHandle<()>>,
     stop_sender: Option<Sender<()>>,
+    pause_sender: Option<Sender<()>>,
+    resume_sender: Option<Sender<()>>,
     
     // Musical timing for sections
     musical_timing: Option<MusicalTiming>,
@@ -586,8 +592,11 @@ impl FMSectionTimer {
             _tick_callback: Arc::new(Mutex::new(None)),
             interval_duration,
             is_running: false,
+            is_paused: false,
             timer_handle: None,
             stop_sender: None,
+            pause_sender: None,
+            resume_sender: None,
             musical_timing: None,
             section_bars: Vec::new(),
         }
@@ -626,8 +635,11 @@ impl FMSectionTimer {
             _tick_callback: Arc::new(Mutex::new(None)),
             interval_duration,
             is_running: false,
+            is_paused: false,
             timer_handle: None,
             stop_sender: None,
+            pause_sender: None,
+            resume_sender: None,
             musical_timing: Some(musical_timing),
             section_bars: all_bars,
         })
@@ -720,7 +732,12 @@ impl AsyncTimer for FMSectionTimer {
         }
 
         let (stop_tx, stop_rx): (Sender<()>, Receiver<()>) = channel();
+        let (pause_tx, pause_rx): (Sender<()>, Receiver<()>) = channel();
+        let (resume_tx, resume_rx): (Sender<()>, Receiver<()>) = channel();
+        
         self.stop_sender = Some(stop_tx);
+        self.pause_sender = Some(pause_tx);
+        self.resume_sender = Some(resume_tx);
 
         let callback = self._tick_callback.clone();
         let duration = self.interval_duration;
@@ -733,6 +750,9 @@ impl AsyncTimer for FMSectionTimer {
             let handle = thread::spawn(move || {
                 let start_time = std::time::Instant::now();
                 let mut last_triggered_event = 0;
+                let mut paused = false;
+                let mut pause_start_time = std::time::Instant::now();
+                let mut total_pause_duration = std::time::Duration::ZERO;
 
                 loop {
                     // Check for stop signal (non-blocking)
@@ -740,7 +760,30 @@ impl AsyncTimer for FMSectionTimer {
                         break;
                     }
 
-                    let elapsed_ms = start_time.elapsed().as_millis() as f64;
+                    // Check for pause signal
+                    if pause_rx.try_recv().is_ok() {
+                        paused = true;
+                        pause_start_time = std::time::Instant::now();
+                        log_debug("Timer thread received pause signal");
+                    }
+
+                    // Check for resume signal
+                    if resume_rx.try_recv().is_ok() {
+                        if paused {
+                            total_pause_duration += pause_start_time.elapsed();
+                            paused = false;
+                            log_debug("Timer thread received resume signal");
+                        }
+                    }
+
+                    // Skip beat processing if paused
+                    if paused {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+
+                    // Calculate effective elapsed time (subtract pause durations)
+                    let elapsed_ms = (start_time.elapsed() - total_pause_duration).as_millis() as f64;
                     
                     // Find next beat event(s) to trigger
                     for (event_index, event) in beat_events.iter().enumerate().skip(last_triggered_event) {
@@ -772,11 +815,30 @@ impl AsyncTimer for FMSectionTimer {
             // Fall back to simple timer for non-musical use cases
             let handle = thread::spawn(move || {
                 let mut tick_count = 0i32;
+                let mut paused = false;
 
                 loop {
                     // Check for stop signal (non-blocking)
                     if stop_rx.try_recv().is_ok() {
                         break;
+                    }
+
+                    // Check for pause signal
+                    if pause_rx.try_recv().is_ok() {
+                        paused = true;
+                        log_debug("Simple timer thread received pause signal");
+                    }
+
+                    // Check for resume signal
+                    if resume_rx.try_recv().is_ok() {
+                        paused = false;
+                        log_debug("Simple timer thread received resume signal");
+                    }
+
+                    // Skip tick if paused
+                    if paused {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
                     }
 
                     thread::sleep(duration);
@@ -835,7 +897,10 @@ impl AsyncTimer for FMSectionTimer {
         }
 
         self.stop_sender = None;
+        self.pause_sender = None;
+        self.resume_sender = None;
         self.is_running = false;
+        self.is_paused = false;
         Ok(())
     }
 
@@ -845,6 +910,52 @@ impl AsyncTimer for FMSectionTimer {
 
     fn is_running(&self) -> bool {
         self.is_running
+    }
+
+    fn pause(&mut self) -> Result<(), String> {
+        if !self.is_running {
+            return Err("Timer is not running".to_string());
+        }
+        
+        if self.is_paused {
+            return Ok(()); // Already paused
+        }
+
+        // Send pause signal if we have a pause sender
+        if let Some(ref pause_sender) = self.pause_sender {
+            if let Err(e) = pause_sender.send(()) {
+                log_warn(&format!("Failed to send pause signal: {}", e));
+            }
+        }
+        
+        self.is_paused = true;
+        log_debug("Timer paused");
+        Ok(())
+    }
+
+    fn resume(&mut self) -> Result<(), String> {
+        if !self.is_running {
+            return Err("Timer is not running".to_string());
+        }
+        
+        if !self.is_paused {
+            return Ok(()); // Already resumed
+        }
+
+        // Send resume signal if we have a resume sender
+        if let Some(ref resume_sender) = self.resume_sender {
+            if let Err(e) = resume_sender.send(()) {
+                log_warn(&format!("Failed to send resume signal: {}", e));
+            }
+        }
+        
+        self.is_paused = false;
+        log_debug("Timer resumed");
+        Ok(())
+    }
+
+    fn is_paused(&self) -> bool {
+        self.is_paused
     }
 }
 
