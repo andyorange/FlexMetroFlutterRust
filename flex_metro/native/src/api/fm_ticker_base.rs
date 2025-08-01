@@ -40,6 +40,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::marker::{Send, Sync}; // Import Send and Sync traits
 use chrono::TimeDelta;
 use crate::api::fm_bar_element::FMBarElement;
+use crate::api::fm_tempo_interval::{FMTempoInterval, FMTempoSequence};
 // use crate::api::internationalization::{I18n, TKey}; // Temporarily disabled
 use crate::{log_info, log_debug, log_warn, log_error};
 
@@ -51,14 +52,15 @@ pub enum BeatType {
     Minor,  // Minor beat - subdivisions within a beat group
 }
 
-/// Musical timing helper that calculates tempo changes and beat intervals
-/// within a section of bars with potentially changing time signatures and tempos
+/// Musical timing calculator that generates precise beat events based on time signatures and tempos
+/// within a sequence of tempo intervals with potentially changing time signatures and tempos
 #[derive(Debug)]
 pub struct MusicalTiming {
     pub beat_events: Vec<BeatEvent>,
     pub total_duration_ms: f64,
     pub start_tempo_bpm: f64,
     pub end_tempo_bpm: f64,
+    pub tempo_sequence: FMTempoSequence,
 }
 
 #[derive(Debug, Clone)]
@@ -75,23 +77,139 @@ pub struct BeatEvent {
 }
 
 impl MusicalTiming {
-    /// Create a new musical timing calculator for a section of bars with tempo
-    /// start_tempo_bpm and end_tempo_bpm should be in quarter notes per minute
-    // // #[flutter_rust_bridge::frb(ignore)]
-    pub fn new(bars: &[FMBarElement], start_tempo_bpm: f64, end_tempo_bpm: f64) -> Result<Self, String> {
-        if bars.is_empty() {
-            return Err("Section must contain at least one bar".to_string());
+    /// Create a new musical timing calculator for a sequence of tempo intervals
+    /// This is the new preferred method for complex tempo sequences
+    pub fn new_from_sequence(tempo_sequence: FMTempoSequence) -> Result<Self, String> {
+        if tempo_sequence.is_empty() {
+            return Err("Tempo sequence must contain at least one interval".to_string());
         }
+
+        let start_tempo_bpm = tempo_sequence.intervals[0].start_tempo_bpm;
+        let end_tempo_bpm = tempo_sequence.intervals.last().unwrap().end_tempo_bpm;
 
         let mut timing = MusicalTiming {
             beat_events: Vec::new(),
             total_duration_ms: 0.0,
             start_tempo_bpm,
             end_tempo_bpm,
+            tempo_sequence: tempo_sequence.clone(),
         };
 
-        timing.calculate_beat_events(bars).map_err(|e| format!("Failed to calculate beat events: {}", e))?;
+        timing.calculate_beat_events_from_sequence(&tempo_sequence)
+            .map_err(|e| format!("Failed to calculate beat events from sequence: {}", e))?;
         Ok(timing)
+    }
+
+    /// Create a new musical timing calculator for a section of bars with tempo
+    /// start_tempo_bpm and end_tempo_bpm should be in quarter notes per minute
+    /// This method is kept for backward compatibility
+    // // #[flutter_rust_bridge::frb(ignore)]
+    pub fn new(bars: &[FMBarElement], start_tempo_bpm: f64, end_tempo_bpm: f64) -> Result<Self, String> {
+        if bars.is_empty() {
+            return Err("Section must contain at least one bar".to_string());
+        }
+
+        // Convert the old single-section approach to use tempo intervals
+        let interval = FMTempoInterval::new(bars.to_vec(), start_tempo_bpm, Some(end_tempo_bpm), "Default Interval".to_string());
+        let sequence = FMTempoSequence::from_interval(interval);
+        Self::new_from_sequence(sequence)
+    }
+
+    /// Calculate all beat events from a tempo sequence with precise timing and tempo changes
+    /// This implementation handles multiple tempo intervals with different tempo progressions
+    fn calculate_beat_events_from_sequence(&mut self, tempo_sequence: &FMTempoSequence) -> Result<(), String> {
+        self.beat_events.clear();
+        
+        let mut current_time_ms = 0.0;
+        let mut global_bar_index = 0;
+
+        for (interval_index, interval) in tempo_sequence.intervals.iter().enumerate() {
+            log_debug(&format!("Processing interval {}: {}", interval_index + 1, interval.description()));
+            
+            // Calculate total quarter notes for this interval
+            let total_quarter_notes = self.calculate_total_quarter_notes(&interval.bars)
+                .map_err(|e| format!("Failed to calculate quarter notes for interval {}: {}", interval_index, e))?;
+            
+            let mut quarter_note_position = 0.0; // Track position within this interval
+
+            for (local_bar_index, bar) in interval.bars.iter().enumerate() {
+                let beat_groups = self.extract_beats(bar)
+                    .map_err(|e| format!("Failed to extract beats from bar {} in interval {}: {}", local_bar_index, interval_index, e))?;
+                
+                let quarter_notes_per_bar = if bar.has_signature {
+                    (bar.nom as f64 * 4.0) / bar.denom as f64
+                } else {
+                    // For time-based bars, estimate based on interval's average tempo
+                    let avg_tempo = (interval.start_tempo_bpm + interval.end_tempo_bpm) / 2.0;
+                    let duration_minutes = bar.nom_secs as f64 / 60.0;
+                    avg_tempo * duration_minutes
+                };
+                
+                // Calculate the duration of each individual note unit in the bar
+                let total_note_units: i32 = beat_groups.iter().sum();
+                let quarter_notes_per_note_unit = quarter_notes_per_bar / total_note_units as f64;
+                
+                let mut is_first_beat_in_bar = true;
+                let mut absolute_beat_in_bar = 0; // Track absolute beat position in bar
+
+                // Iterate through each beat group
+                for (group_index, &group_size) in beat_groups.iter().enumerate() {
+                    // Iterate through each note in this beat group
+                    for note_in_group in 0..group_size {
+                        // Calculate progress within this interval for tempo interpolation
+                        let interval_progress = if total_quarter_notes > 0.0 {
+                            quarter_note_position / total_quarter_notes
+                        } else {
+                            0.0
+                        };
+                        let current_tempo = interval.start_tempo_bpm + 
+                            (interval.end_tempo_bpm - interval.start_tempo_bpm) * interval_progress;
+
+                        // Determine beat type dynamically based on position in beat structure
+                        let beat_type = if is_first_beat_in_bar {
+                            BeatType::Major  // First beat of the bar is always Major
+                        } else if note_in_group == 0 && group_index > 0 {
+                            BeatType::Medium // First beat of a group (after the first group) is Medium
+                        } else {
+                            BeatType::Minor  // All other beats are Minor
+                        };
+
+                        // Create beat event with global bar index
+                        self.beat_events.push(BeatEvent {
+                            time_offset_ms: current_time_ms,
+                            bar_index: global_bar_index,
+                            beat_in_bar: group_index,
+                            subbeat_in_beat: absolute_beat_in_bar, // Use absolute position in bar
+                            tempo_bpm: current_tempo,
+                            nom: bar.nom,
+                            denom: bar.denom,
+                            beat_type,
+                        });
+
+                        // Calculate the time duration for this note unit with changing tempo within the interval
+                        let note_duration_ms = self.calculate_note_duration_with_interval_tempo_change(
+                            quarter_note_position, 
+                            quarter_notes_per_note_unit, 
+                            total_quarter_notes,
+                            interval.start_tempo_bpm,
+                            interval.end_tempo_bpm
+                        );
+                        
+                        // Advance time and quarter note position
+                        current_time_ms += note_duration_ms;
+                        quarter_note_position += quarter_notes_per_note_unit;
+                        absolute_beat_in_bar += 1; // Increment absolute beat position
+                        is_first_beat_in_bar = false;
+                    }
+                }
+                global_bar_index += 1; // Increment global bar index
+            }
+        }
+
+        self.total_duration_ms = current_time_ms;
+        log_debug(&format!("Generated {} beat events across {} intervals, total duration: {:.1}ms", 
+                          self.beat_events.len(), tempo_sequence.intervals.len(), self.total_duration_ms));
+        Ok(())
     }
 
     /// Calculate all beat events with their precise timing and tempo changes
@@ -280,6 +398,44 @@ impl MusicalTiming {
         duration_ms
     }
 
+    /// Calculate the duration of a single note unit with changing tempo within a specific interval
+    /// Uses numerical integration for the portion of the interval this note occupies
+    fn calculate_note_duration_with_interval_tempo_change(
+        &self, 
+        start_quarter_note_position: f64, 
+        quarter_notes_in_note: f64,
+        total_quarter_notes_in_interval: f64,
+        interval_start_tempo: f64,
+        interval_end_tempo: f64
+    ) -> f64 {
+        if (interval_end_tempo - interval_start_tempo).abs() < 1e-6 {
+            // Constant tempo case
+            return (quarter_notes_in_note * 60000.0) / interval_start_tempo;
+        }
+        
+        // For a small segment with linear tempo change within this interval:
+        // Use numerical integration with multiple steps for accuracy
+        let num_steps = 10;
+        let step_size = quarter_notes_in_note / num_steps as f64;
+        let mut total_time = 0.0;
+        
+        for i in 0..num_steps {
+            let t = start_quarter_note_position + (i as f64 + 0.5) * step_size;
+            let progress = if total_quarter_notes_in_interval > 0.0 {
+                t / total_quarter_notes_in_interval
+            } else {
+                0.0
+            };
+            let tempo_at_t = interval_start_tempo + (interval_end_tempo - interval_start_tempo) * progress;
+            
+            // Duration for this step: (quarter_notes * 60000ms/min) / (quarter_notes/min)
+            let step_duration = (step_size * 60000.0) / tempo_at_t;
+            total_time += step_duration;
+        }
+        
+        total_time
+    }
+
     /// Calculate the duration of a single note unit with changing tempo
     /// Uses numerical integration for the portion of the section this note occupies
     fn calculate_note_duration_with_tempo_change(
@@ -437,9 +593,19 @@ impl FMSectionTimer {
 
     /// Create a timer for a musical section with bars and tempo changes
     /// start_tempo_bpm and end_tempo_bpm should be in quarter notes per minute
+    /// This method is kept for backward compatibility
     pub fn new_with_section(section_bars: Vec<FMBarElement>, start_tempo_bpm: f64, end_tempo_bpm: f64) -> Result<Self, String> {
-        let musical_timing = MusicalTiming::new(&section_bars, start_tempo_bpm, end_tempo_bpm)
-            .map_err(|e| format!("Failed to create musical timing: {}", e))?;
+        // Convert single section to tempo sequence
+        let interval = FMTempoInterval::new(section_bars.clone(), start_tempo_bpm, Some(end_tempo_bpm), "Default Section".to_string());
+        let sequence = FMTempoSequence::from_interval(interval);
+        Self::new_with_tempo_sequence(sequence)
+    }
+
+    /// Create a timer for a tempo sequence with multiple intervals
+    /// This is the new preferred method for complex musical arrangements
+    pub fn new_with_tempo_sequence(tempo_sequence: FMTempoSequence) -> Result<Self, String> {
+        let musical_timing = MusicalTiming::new_from_sequence(tempo_sequence.clone())
+            .map_err(|e| format!("Failed to create musical timing from sequence: {}", e))?;
         
         // Use the shortest beat interval as the base timer interval
         // This ensures we don't miss any beat events
@@ -452,6 +618,8 @@ impl FMSectionTimer {
             (min_interval_ms / 2.0).max(1.0) as u64  // Use half the minimum to ensure precision
         );
 
+        let all_bars = tempo_sequence.all_bars();
+
         Ok(FMSectionTimer {
             _tick_callback: Arc::new(Mutex::new(None)),
             interval_duration,
@@ -459,7 +627,7 @@ impl FMSectionTimer {
             timer_handle: None,
             stop_sender: None,
             musical_timing: Some(musical_timing),
-            section_bars,
+            section_bars: all_bars,
         })
     }
 
