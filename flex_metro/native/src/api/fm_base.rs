@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use std::fs;
 use std::path::Path;
-use yaml_rust::{Yaml, YamlLoader};
+use yaml_rust::{YamlLoader};
 
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)] 
@@ -24,41 +24,91 @@ impl From<(Vec<i32>, i32)> for MetricKey {
 }
 
 pub static DEFAULT_BEATS: Lazy<HashMap<MetricKey, Vec<i32>>> = Lazy::new(|| {
-    println!("Current working directory: {:?}", std::env::current_dir().unwrap());
+    match std::env::current_dir() {
+        Ok(dir) => println!("Current working directory: {:?}", dir),
+        Err(e) => eprintln!("Failed to get current directory: {}", e),
+    }
 
     let config_path = Path::new("./native/src/api/cfg/beats.yaml");
-    let config_str = fs::read_to_string(config_path).expect("Failed to read beats.yaml");
-    let docs = YamlLoader::load_from_str(&config_str).expect("Failed to parse beats.yaml");
+    let config_str = match fs::read_to_string(config_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Failed to read beats.yaml: {}", e);
+            return HashMap::new(); // Return empty HashMap on error
+        }
+    };
+    
+    let docs = match YamlLoader::load_from_str(&config_str) {
+        Ok(docs) => docs,
+        Err(e) => {
+            eprintln!("Failed to parse beats.yaml: {}", e);
+            return HashMap::new(); // Return empty HashMap on error
+        }
+    };
+    
+    if docs.is_empty() {
+        eprintln!("No documents found in beats.yaml");
+        return HashMap::new();
+    }
+    
     let config = docs[0].clone();
 
     let mut beats = HashMap::new();
     if let Some(hash) = config.as_hash() {
         for (key, value) in hash {
-            let num_denom = key.as_str().expect("Failed to convert key to string");
-            let (num_str, denom_str) = num_denom.split_once('/').expect("Failed to split key into num and denom");
-            let num: i32 = num_str.trim().parse().expect("Failed to parse num");
-            let denom: i32 = denom_str.trim().parse().expect("Failed to parse denom");
-    
-            let metric_key = MetricKey::Standard((num, denom));
-            let beat_values = value.as_vec().expect("Failed to convert value to vec").iter().map(|x| x.as_i64().expect("Failed to convert beat value to i64") as i32).collect();
-    
-            beats.insert(metric_key, beat_values);
+            let processing_result = (|| -> Result<(), Box<dyn std::error::Error>> {
+                let num_denom = key.as_str().ok_or("Failed to convert key to string")?;
+                let (num_str, denom_str) = num_denom.split_once('/').ok_or("Failed to split key into num and denom")?;
+                let num: i32 = num_str.trim().parse()?;
+                let denom: i32 = denom_str.trim().parse()?;
+        
+                let metric_key = MetricKey::Standard((num, denom));
+                let value_vec = value.as_vec().ok_or("Failed to convert value to vec")?;
+                let beat_values: Result<Vec<i32>, Box<dyn std::error::Error>> = value_vec.iter().map(|x| {
+                    x.as_i64().ok_or_else(|| "Failed to convert beat value to i64".into()).map(|v| v as i32)
+                }).collect();
+        
+                beats.insert(metric_key, beat_values?);
+                Ok(())
+            })();
+            
+            if let Err(e) = processing_result {
+                eprintln!("Error processing beat configuration entry: {}", e);
+            }
         }
     }
 
     beats
 });
 
-fn linspace(start: f64, end: f64, num: usize) -> Vec<f64> {
-    if num == 0 {
-        return vec![];
-    }
-    if num == 1 {
-        return vec![start];
+
+/// Load beat configuration from YAML file
+pub fn load_beat_config() -> Result<HashMap<MetricKey, Vec<i32>>, Box<dyn std::error::Error>> {
+    let config_path = Path::new("./native/src/api/cfg/beats.yaml");
+    let config_str = fs::read_to_string(config_path)?;
+    let docs = YamlLoader::load_from_str(&config_str)?;
+    let config = docs[0].clone();
+
+    let mut beats = HashMap::new();
+    if let Some(hash) = config.as_hash() {
+        for (key, value) in hash {
+            let num_denom = key.as_str().ok_or("Failed to convert key to string")?;
+            let (num_str, denom_str) = num_denom.split_once('/').ok_or("Failed to split key into num and denom")?;
+            let num: i32 = num_str.trim().parse()?;
+            let denom: i32 = denom_str.trim().parse()?;
+    
+            let metric_key = MetricKey::Standard((num, denom));
+            let beat_values: Result<Vec<i32>, _> = value.as_vec()
+                .ok_or("Failed to convert value to vec")?
+                .iter()
+                .map(|x| x.as_i64().ok_or("Failed to convert beat value to i64").map(|v| v as i32))
+                .collect();
+            
+            beats.insert(metric_key, beat_values?);
+        }
     }
 
-    let step = (end - start) / (num - 1) as f64;
-    (0..num).map(|i| start + i as f64 * step).collect()
+    Ok(beats)
 }
 
 // -- unit tests --
@@ -81,7 +131,7 @@ mod tests {
             (MetricKey::Standard((8, 8)), vec![3, 3, 2]),
             (MetricKey::Standard((3, 2)), vec![3]),
         ];
-        let failed_beats = vec![
+        let _failed_beats = vec![
             (MetricKey::Standard((6, 11)), vec![3, 3]),
             (MetricKey::Standard((5, 4)), vec![2, 3])
         ];
