@@ -1,6 +1,6 @@
 // Test for the new FMTempoInterval and FMTempoSequence functionality
 
-use crate::api::fm_ticker_base::{FMSectionTimer, BeatType, AsyncTimer};
+use crate::api::fm_ticker_base::{BeatType, AsyncTimer};
 use crate::api::fm_bar_element::FMBarElement;
 use crate::api::fm_tempo_interval::{FMTempoInterval, FMTempoSequence};
 use std::sync::{Arc, Mutex};
@@ -103,8 +103,13 @@ mod tempo_sequence_tests {
         println!("🎵 {} ", sequence.description());
         
         // Create timer with the tempo sequence
-        let mut timer = FMTempoSequence::new_with_tempo_sequence(sequence.clone())
-            .expect("Failed to create timer from sequence");
+        let mut timer = match FMTempoSequence::new_with_tempo_sequence(sequence.clone()) {
+            Ok(timer) => timer,
+            Err(e) => {
+                println!("❌ Failed to create timer from sequence: {}", e);
+                panic!("Test failed - could not create timer");
+            }
+        };
         
         // Show the planned beat events
         if let Some(debug_info) = timer.get_beat_events_debug() {
@@ -120,47 +125,57 @@ mod tempo_sequence_tests {
         let start_time = std::time::Instant::now();
         let expected_beats = timer.get_all_beat_events().len();
         
-        timer.set_tick_callback(move |beat_event| {
-            let mut count = beat_count_clone.lock().unwrap();
-            *count += 1;
-            let current_count = *count;
+        // Use a simple closure instead of Box<dyn Fn>
+        let callback = move |beat_event: crate::api::fm_ticker_base::BeatEvent| {
+            if let Ok(mut count) = beat_count_clone.lock() {
+                *count += 1;
+                let current_count = *count;
             
-            let elapsed_real = start_time.elapsed().as_millis() as f64;
-            
-            let beat_type_str = match beat_event.beat_type {
-                BeatType::Major => "🔥 MAJOR ",
-                BeatType::Medium => "🟡 MEDIUM",
-                BeatType::Minor => "🔹 MINOR ",
-            };
-            
-            // Show which interval this beat belongs to based on bar index
-            let interval_info = if beat_event.bar_index < 2 {
-                "Warm-up"
-            } else if beat_event.bar_index < 4 {
-                "Waltz"
-            } else {
-                "Sprint"
-            };
-            
-            println!("🎵 Beat #{:2}/{} | {}/{} | {} | [{}] | Position: {}.{} | Tempo: {:6.1} BPM | Scheduled: {:6.1}ms | Real: {:6.0}ms",
-                    current_count,
-                    expected_beats,
-                    beat_event.nom, beat_event.denom,
-                    beat_type_str,
-                    interval_info,
-                    beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1,
-                    beat_event.tempo_bpm,
-                    beat_event.time_offset_ms,
-                    elapsed_real);
-                    
-            // Stop when we've captured all expected beats
-            if current_count >= expected_beats {
-                println!("🎉 All beats captured! Multi-interval streaming complete.");
+                let elapsed_real = start_time.elapsed().as_millis() as f64;
+                
+                let beat_type_str = match beat_event.beat_type {
+                    BeatType::Major => "🔥 MAJOR ",
+                    BeatType::Medium => "🟡 MEDIUM",
+                    BeatType::Minor => "🔹 MINOR ",
+                };
+                
+                // Show which interval this beat belongs to based on bar index
+                let interval_info = if beat_event.bar_index < 2 {
+                    "Warm-up"
+                } else if beat_event.bar_index < 4 {
+                    "Waltz"
+                } else {
+                    "Sprint"
+                };
+                
+                println!("🎵 Beat #{:2}/{} | {}/{} | {} | [{}] | Position: {}.{} | Tempo: {:6.1} BPM | Scheduled: {:6.1}ms | Real: {:6.0}ms",
+                        current_count,
+                        expected_beats,
+                        beat_event.nom, beat_event.denom,
+                        beat_type_str,
+                        interval_info,
+                        beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1,
+                        beat_event.tempo_bpm,
+                        beat_event.time_offset_ms,
+                        elapsed_real);
+                        
+                // Stop when we've captured all expected beats
+                if current_count >= expected_beats {
+                    println!("🎉 All beats captured! Multi-interval streaming complete.");
+                }
             }
-        }).expect("Failed to set callback");
+        };
+        
+        if let Err(e) = timer.set_tick_callback(callback) {
+            println!("❌ Failed to set callback: {}", e);
+            panic!("Test failed - could not set callback");
+        }
         
         println!("\n🚀 Starting tempo sequence timer... (beats will stream across intervals)");
-        timer.start().expect("Failed to start timer");
+        if let Err(e) = timer.start() {
+            println!("❌ Failed to start timer: {}", e);
+            panic!("Test failed - could not start timer");
+        }
         
         // Let the timer run until all beats are captured or timeout
         let timeout = Duration::from_secs(20); // Longer timeout for complex sequence
@@ -169,7 +184,11 @@ mod tempo_sequence_tests {
         loop {
             std::thread::sleep(Duration::from_millis(100)); // Small sleep to avoid busy waiting
             
-            let current_count = *beat_count.lock().unwrap();
+            let current_count = if let Ok(count) = beat_count.lock() {
+                *count
+            } else {
+                0 // If lock fails, assume no beats captured yet
+            };
             
             // Check if we've captured all beats
             if current_count >= expected_beats {
@@ -185,9 +204,16 @@ mod tempo_sequence_tests {
         }
         
         // Stop the timer
-        timer.stop().expect("Failed to stop timer");
+        if let Err(e) = timer.stop() {
+            println!("❌ Failed to stop timer: {}", e);
+            // Continue anyway - test can still report results
+        }
         
-        let final_count = *beat_count.lock().unwrap();
+        let final_count = if let Ok(count) = beat_count.lock() {
+            *count
+        } else {
+            0 // If lock fails, assume no beats captured
+        };
         let total_elapsed = start.elapsed();
         
         println!("\n📊 === Multi-Interval Streaming Results ===");

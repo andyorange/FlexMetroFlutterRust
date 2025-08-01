@@ -1,7 +1,7 @@
 // FMTickerBase focused test - 4/4, 6/8, 4/4 bars with tempo 60->90 BPM
 // This test focuses purely on the Rust core functionality without Flutter interface
 
-use crate::api::fm_ticker_base::{FMSectionTimer, BeatEvent, BeatType, MusicalTiming};
+use crate::api::fm_ticker_base::{FMSectionTimer, BeatEvent, BeatType, MusicalTiming, AsyncTimer};
 use crate::api::fm_bar_element::FMBarElement;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

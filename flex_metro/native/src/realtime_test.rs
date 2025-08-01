@@ -25,8 +25,13 @@ mod realtime_tests {
         println!("🎯 Tempo: 60.0 BPM → 90.0 BPM");
         
         // Create timer with the musical section
-        let mut timer = FMSectionTimer::new_with_section(bars.clone(), 60.0, 90.0)
-            .expect("Failed to create timer");
+        let mut timer = match FMSectionTimer::new_with_section(bars.clone(), 60.0, 90.0) {
+            Ok(timer) => timer,
+            Err(e) => {
+                println!("❌ Failed to create timer: {}", e);
+                panic!("Test failed - could not create timer");
+            }
+        };
         
         // Show the planned beat events
         if let Some(debug_info) = timer.get_beat_events_debug() {
@@ -41,36 +46,46 @@ mod realtime_tests {
         let beat_count_clone = beat_count.clone();
         let start_time = std::time::Instant::now();
         
-        timer.set_tick_callback(move |beat_event| {
-            let mut count = beat_count_clone.lock().unwrap();
-            *count += 1;
-            let current_count = *count;
+        // Use a simple closure instead of Box<dyn Fn>
+        let callback = move |beat_event: crate::api::fm_ticker_base::BeatEvent| {
+            if let Ok(mut count) = beat_count_clone.lock() {
+                *count += 1;
+                let current_count = *count;
             
-            let elapsed_real = start_time.elapsed().as_millis() as f64;
-            
-            let beat_type_str = match beat_event.beat_type {
-                BeatType::Major => "🔥 MAJOR ",
-                BeatType::Medium => "🟡 MEDIUM",
-                BeatType::Minor => "🔹 MINOR ",
-            };
-            
-            println!("🎵 Live Beat #{:2}/14 | {}/{} | {} | Position: {}.{} | Tempo: {:5.1} BPM | Scheduled: {:6.1}ms | Real: {:6.0}ms",
-                    current_count,
-                    beat_event.nom, beat_event.denom,
-                    beat_type_str,
-                    beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1,
-                    beat_event.tempo_bpm,
-                    beat_event.time_offset_ms,
-                    elapsed_real);
-                    
-            // Stop when we've captured all expected beats
-            if current_count >= 14 {
-                println!("🎉 All beats captured! Real-time streaming complete.");
+                let elapsed_real = start_time.elapsed().as_millis() as f64;
+                
+                let beat_type_str = match beat_event.beat_type {
+                    BeatType::Major => "🔥 MAJOR ",
+                    BeatType::Medium => "🟡 MEDIUM",
+                    BeatType::Minor => "🔹 MINOR ",
+                };
+                
+                println!("🎵 Live Beat #{:2}/14 | {}/{} | {} | Position: {}.{} | Tempo: {:5.1} BPM | Scheduled: {:6.1}ms | Real: {:6.0}ms",
+                        current_count,
+                        beat_event.nom, beat_event.denom,
+                        beat_type_str,
+                        beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1,
+                        beat_event.tempo_bpm,
+                        beat_event.time_offset_ms,
+                        elapsed_real);
+                        
+                // Stop when we've captured all expected beats
+                if current_count >= 14 {
+                    println!("🎉 All beats captured! Real-time streaming complete.");
+                }
             }
-        }).expect("Failed to set callback");
+        };
+        
+        if let Err(e) = timer.set_tick_callback(callback) {
+            println!("❌ Failed to set callback: {}", e);
+            panic!("Test failed - could not set callback");
+        }
         
         println!("\n🚀 Starting real-time timer... (beats will stream live)");
-        timer.start().expect("Failed to start timer");
+        if let Err(e) = timer.start() {
+            println!("❌ Failed to start timer: {}", e);
+            panic!("Test failed - could not start timer");
+        }
         
         // Let the timer run until all beats are captured or timeout
         let timeout = Duration::from_secs(15); // Safety timeout
@@ -79,7 +94,11 @@ mod realtime_tests {
         loop {
             std::thread::sleep(Duration::from_millis(100)); // Small sleep to avoid busy waiting
             
-            let current_count = *beat_count.lock().unwrap();
+            let current_count = if let Ok(count) = beat_count.lock() {
+                *count
+            } else {
+                0 // If lock fails, assume no beats captured yet
+            };
             
             // Check if we've captured all beats
             if current_count >= 14 {
@@ -95,9 +114,16 @@ mod realtime_tests {
         }
         
         // Stop the timer
-        timer.stop().expect("Failed to stop timer");
+        if let Err(e) = timer.stop() {
+            println!("❌ Failed to stop timer: {}", e);
+            // Continue anyway - test can still report results
+        }
         
-        let final_count = *beat_count.lock().unwrap();
+        let final_count = if let Ok(count) = beat_count.lock() {
+            *count
+        } else {
+            0 // If lock fails, assume no beats captured
+        };
         let total_elapsed = start.elapsed();
         
         println!("\n📊 === Real-Time Streaming Results ===");

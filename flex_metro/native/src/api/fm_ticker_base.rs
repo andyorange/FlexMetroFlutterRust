@@ -85,7 +85,9 @@ impl MusicalTiming {
         }
 
         let start_tempo_bpm = tempo_sequence.intervals[0].start_tempo_bpm;
-        let end_tempo_bpm = tempo_sequence.intervals.last().unwrap().end_tempo_bpm;
+        let end_tempo_bpm = tempo_sequence.intervals.last()
+            .ok_or("Tempo sequence is unexpectedly empty after non-empty check")?
+            .end_tempo_bpm;
 
         let mut timing = MusicalTiming {
             beat_events: Vec::new(),
@@ -879,7 +881,7 @@ impl FMCircleTicker {
         }
     }
 
-    pub fn connect_timer(&mut self, mut timer: FMSectionTimer) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn connect_timer(&mut self, mut timer: FMSectionTimer) -> Result<(), String> {
         // For now, set up a simple callback that logs
         // In a more complex implementation, you'd use channels or other mechanisms
         // to communicate back to the ticker's tick_callback method
@@ -896,14 +898,14 @@ impl FMCircleTicker {
         Ok(())
     }
 
-    pub fn start_timer(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn start_timer(&mut self) -> Result<(), String> {
         if let Some(ref mut timer) = self.timer {
             timer.start()?;
         }
         Ok(())
     }
 
-    pub fn stop_timer(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn stop_timer(&mut self) -> Result<(), String> {
         if let Some(ref mut timer) = self.timer {
             timer.stop()?;
         }

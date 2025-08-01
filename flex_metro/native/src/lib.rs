@@ -7,6 +7,9 @@ pub mod realtime_test;
 #[cfg(test)]
 pub mod tempo_sequence_test;
 
+#[cfg(test)]
+pub mod fm_ticker_base_test;
+
 // Re-export types for FRB
 pub use chrono::TimeDelta;
 pub use std::error::Error;

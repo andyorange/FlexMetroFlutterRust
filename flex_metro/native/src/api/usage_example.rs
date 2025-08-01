@@ -7,7 +7,7 @@ use crate::api::fm_ticker_base::{
 };
 
 // Now you can use the types
-pub fn example_usage() -> Result<(), Box<dyn std::error::Error>> {
+pub fn example_usage() -> Result<(), String> {
     // Create a timer - now uses TimeDelta and returns Result
     let time_delta = chrono::TimeDelta::try_milliseconds(500)
         .ok_or("Failed to create TimeDelta")?;

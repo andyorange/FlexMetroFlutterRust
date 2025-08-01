@@ -88,9 +88,8 @@ impl FMTempoSequence {
     }
     
     /// Create a FMSectionTimer from this tempo sequence
-    pub fn new_with_tempo_sequence(sequence: FMTempoSequence) -> Result<crate::api::fm_ticker_base::FMSectionTimer, Box<dyn std::error::Error>> {
+    pub fn new_with_tempo_sequence(sequence: FMTempoSequence) -> Result<crate::api::fm_ticker_base::FMSectionTimer, String> {
         crate::api::fm_ticker_base::FMSectionTimer::new_with_tempo_sequence(sequence)
-            .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)) as Box<dyn std::error::Error>)
     }
     
     /// Get the total number of bars across all intervals
