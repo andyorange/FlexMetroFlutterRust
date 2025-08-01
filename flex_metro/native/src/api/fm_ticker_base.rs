@@ -121,6 +121,7 @@ impl MusicalTiming {
             let quarter_notes_per_note_unit = quarter_notes_per_bar / total_note_units as f64;
             
             let mut is_first_beat_in_bar = true;
+            let mut absolute_beat_in_bar = 0; // Track absolute beat position in bar
 
             // Iterate through each beat group
             for (group_index, &group_size) in beat_groups.iter().enumerate() {
@@ -130,10 +131,10 @@ impl MusicalTiming {
                     let section_progress = quarter_note_position / total_quarter_notes;
                     let current_tempo = self.start_tempo_bpm + (self.end_tempo_bpm - self.start_tempo_bpm) * section_progress;
 
-                    // Determine beat type
+                    // Determine beat type dynamically based on position in beat structure
                     let beat_type = if is_first_beat_in_bar {
                         BeatType::Major  // First beat of the bar is always Major
-                    } else if note_in_group == 0 {
+                    } else if note_in_group == 0 && group_index > 0 {
                         BeatType::Medium // First beat of a group (after the first group) is Medium
                     } else {
                         BeatType::Minor  // All other beats are Minor
@@ -144,7 +145,7 @@ impl MusicalTiming {
                         time_offset_ms: current_time_ms,
                         bar_index,
                         beat_in_bar: group_index,
-                        subbeat_in_beat: note_in_group as usize,
+                        subbeat_in_beat: absolute_beat_in_bar, // Use absolute position in bar
                         tempo_bpm: current_tempo,
                         nom: bar.nom,
                         denom: bar.denom,
@@ -161,6 +162,7 @@ impl MusicalTiming {
                     // Advance time and quarter note position
                     current_time_ms += note_duration_ms;
                     quarter_note_position += quarter_notes_per_note_unit;
+                    absolute_beat_in_bar += 1; // Increment absolute beat position
                     is_first_beat_in_bar = false;
                 }
             }
@@ -532,6 +534,15 @@ impl FMSectionTimer {
         }
     }
 
+    /// Get all beat events from the event queue as a vector
+    pub fn get_all_beat_events(&self) -> Vec<BeatEvent> {
+        if let Some(ref timing) = self.musical_timing {
+            timing.get_beat_events().to_vec()
+        } else {
+            Vec::new()
+        }
+    }
+
     /// Get the total duration of the musical section in milliseconds
     pub fn get_total_duration_ms(&self) -> f64 {
         if let Some(ref timing) = self.musical_timing {
@@ -649,16 +660,16 @@ impl AsyncTimer for FMSectionTimer {
         if let Some(ref stop_sender) = self.stop_sender {
             if let Err(e) = stop_sender.send(()) {
                 // Thread might have already exited, which is fine
-                log_warn!("Failed to send stop signal: {}", e);
+                log_warn(&format!("Failed to send stop signal: {}", e));
             }
         }
 
         // Wait for the timer thread to finish
         if let Some(handle) = self.timer_handle.take() {
             match handle.join() {
-                Ok(_) => log_debug!("Timer stopped successfully"),
+                Ok(_) => log_debug("Timer stopped successfully"),
                 Err(e) => {
-                    log_error!("Timer thread panicked: {:?}", e);
+                    log_error(&format!("Timer thread panicked: {:?}", e));
                     return Err("Thread panic".into()); // I18n::t(TKey::ThreadPanic).into());
                 }
             }
@@ -718,9 +729,9 @@ impl FMCircleTicker {
         let callback = |beat_event: BeatEvent| {
             // This demonstrates the callback mechanism working
             // In practice, this would trigger the ticker's tick_callback via some communication mechanism
-            log_info!("Timer tick: bar={}, beat={}/{}, beat_type={:?}, time={}ms", 
+            log_info(&format!("Timer tick: bar={}, beat={}/{}, beat_type={:?}, time={}ms", 
                      beat_event.bar_index + 1, beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1, 
-                     beat_event.beat_type, beat_event.time_offset_ms);
+                     beat_event.beat_type, beat_event.time_offset_ms));
         };
         
         timer.set_tick_callback(callback)?;
@@ -756,9 +767,9 @@ impl FMTickerBase for FMCircleTicker {
         };
         
         // Handle the tick logic here
-        log_debug!("FMCircleTicker tick_callback: bar={}, beat={}/{}, state={:?}, beat_type={:?}", 
+        log_debug(&format!("FMCircleTicker tick_callback: bar={}, beat={}/{}, state={:?}, beat_type={:?}", 
                   beat_event.bar_index + 1, beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1,
-                  self.state, beat_event.beat_type);
+                  self.state, beat_event.beat_type));
     }
 }
 
@@ -778,7 +789,7 @@ impl FlutterTicker {
         let beat_config = match crate::api::fm_base::load_beat_config() {
             Ok(config) => config,
             Err(e) => {
-                log_error!("Failed to load beat config: {}", e);
+                log_error(&format!("Failed to load beat config: {}", e));
                 // Return error instead of using empty HashMap
                 return Err(format!("Beat configuration loading failed: {}", e));
             }
@@ -851,9 +862,9 @@ impl FMTickerBase for FlutterTicker {
             _ => FMTickPositions::TNone,
         };
         
-        log_debug!("FlutterTicker tick_callback: bar={}, beat={}/{}, state={:?}, beat_type={:?}", 
+        log_debug(&format!("FlutterTicker tick_callback: bar={}, beat={}/{}, state={:?}, beat_type={:?}", 
                   beat_event.bar_index + 1, beat_event.beat_in_bar + 1, beat_event.subbeat_in_beat + 1,
-                  self.state, beat_event.beat_type);
+                  self.state, beat_event.beat_type));
     }
 }
 

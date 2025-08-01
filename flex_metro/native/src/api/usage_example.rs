@@ -9,7 +9,9 @@ use crate::api::fm_ticker_base::{
 // Now you can use the types
 pub fn example_usage() -> Result<(), Box<dyn std::error::Error>> {
     // Create a timer - now uses TimeDelta and returns Result
-    let mut timer = FMSectionTimer::new(chrono::TimeDelta::try_milliseconds(500).unwrap())?;
+    let time_delta = chrono::TimeDelta::try_milliseconds(500)
+        .ok_or("Failed to create TimeDelta")?;
+    let mut timer = FMSectionTimer::new(time_delta)?;
     
     // Set up callback
     timer.set_tick_callback(|beat_event| {
