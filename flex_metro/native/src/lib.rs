@@ -10,6 +10,9 @@ pub mod tempo_sequence_test;
 #[cfg(test)]
 pub mod fm_ticker_base_test;
 
+#[cfg(test)]
+pub mod composition_integration_test;
+
 // Re-export types for FRB
 pub use chrono::TimeDelta;
 pub use std::error::Error;
@@ -114,8 +117,17 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_composition_demonstration() {
+        println!("\n=== Testing Composition Demonstration ===");
+        
+        // Run the demonstration
+        crate::api::composition_demo::run_composition_demonstration();
+        
+        println!("✅ Composition demonstration completed successfully!");
+    }
+
+    #[test]
     fn test_pause_resume_functionality() {
-        println!("\n=== Pause/Resume Test: FMTempoInterval Sequence ===");
         
         use crate::api::fm_tempo_interval::{FMTempoInterval, FMTempoSequence};
         use crate::api::fm_ticker_base::AsyncTimer;

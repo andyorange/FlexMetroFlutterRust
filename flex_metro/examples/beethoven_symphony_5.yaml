@@ -1,0 +1,198 @@
+# Example Musical Composition YAML
+# Demonstrates the nested structure: Composition -> Movement -> Section -> Bar
+# With repetitions and individual endings
+
+composer_name: "Ludwig van Beethoven"
+work_name: "Symphony No. 5 in C minor, Op. 67"
+
+movements:
+  - name: "I. Allegro con brio"
+    tempo_bpm: 108.0
+    sections:
+      - name: "First Theme (Fate Motif)"
+        bars:
+          - number: 1
+            numerator: 2
+            denominator: 4
+          - number: 2
+            numerator: 2
+            denominator: 4
+          - number: 3
+            numerator: 2
+            denominator: 4
+          - number: 4
+            numerator: 2
+            denominator: 4
+        repetitions: []
+      
+      - name: "Bridge"
+        bars:
+          - number: 5
+            numerator: 2
+            denominator: 4
+          - number: 6
+            numerator: 2
+            denominator: 4
+        repetitions:
+          # Repeat the First Theme twice with identical ending pattern for each repetition
+          - start_section: 1
+            end_section: 1
+            num_repetitions: 2
+            individual_ending_pattern:
+              - number: 1  # Bar numbering restarts in repetition
+                numerator: 2
+                denominator: 4
+                name: "first ending"
+              - number: 2
+                numerator: 2
+                denominator: 4
+                name: "transition"
+      
+      - name: "Second Theme"
+        tempo_bpm: 96.0
+        bars:
+          - number: 7
+            numerator: 2
+            denominator: 4
+          - number: 8
+            numerator: 2
+            denominator: 4
+          - number: 9
+            numerator: 2
+            denominator: 4
+          - number: 10
+            numerator: 2
+            denominator: 4
+        repetitions: []
+      
+      - name: "Development"
+        bars:
+          - number: 11
+            numerator: 2
+            denominator: 4
+          - number: 12
+            numerator: 2
+            denominator: 4
+          - number: 13
+            numerator: 2
+            denominator: 4
+          - number: 14
+            numerator: 2
+            denominator: 4
+        repetitions:
+          # Complex repetition: repeat Bridge and Second Theme together with identical ending pattern
+          - start_section: 2
+            end_section: 3
+            num_repetitions: 1
+            individual_ending_pattern:
+              - number: 1
+                numerator: 2
+                denominator: 4
+                name: "development climax"
+
+  - name: "II. Andante con moto"
+    tempo_bpm: 92.0
+    sections:
+      - name: "Theme"
+        bars:
+          - number: 1
+            numerator: 3
+            denominator: 8
+          - number: 2
+            numerator: 3
+            denominator: 8
+          - number: 3
+            numerator: 3
+            denominator: 8
+          - number: 4
+            numerator: 3
+            denominator: 8
+        repetitions: []
+      
+      - name: "Variation 1"
+        bars:
+          - number: 5
+            numerator: 3
+            denominator: 8
+          - number: 6
+            numerator: 3
+            denominator: 8
+          - number: 7
+            numerator: 3
+            denominator: 8
+          - number: 8
+            numerator: 3
+            denominator: 8
+        repetitions:
+          # Simple repetition of the theme
+          - start_section: 1
+            end_section: 1
+            num_repetitions: 1
+            individual_ending_pattern: null  # No individual ending pattern
+
+  - name: "III. Allegro"
+    tempo_bpm: 96.0
+    sections:
+      - name: "Scherzo"
+        bars:
+          - number: 1
+            numerator: 3
+            denominator: 4
+          - number: 2
+            numerator: 3
+            denominator: 4
+          - number: 3
+            numerator: 3
+            denominator: 4
+          - number: 4
+            numerator: 3
+            denominator: 4
+        repetitions: []
+      
+      - name: "Trio"
+        bars:
+          - number: 5
+            numerator: 3
+            denominator: 4
+          - number: 6
+            numerator: 3
+            denominator: 4
+          - number: 7
+            numerator: 3
+            denominator: 4
+          - number: 8
+            numerator: 3
+            denominator: 4
+        repetitions:
+          # Da Capo: repeat Scherzo after Trio twice with identical ending pattern
+          - start_section: 1
+            end_section: 1
+            num_repetitions: 2
+            individual_ending_pattern:
+              - number: 1
+                numerator: 3
+                denominator: 4
+                name: "da capo ending"
+              - number: 2
+                numerator: 3
+                denominator: 4
+                name: "fine"
+
+  - name: "IV. Allegro"
+    tempo_bpm: 84.0
+    sections:
+      - name: "Victory Theme"
+        bars:
+          - number: 1
+            numerator: 4
+            denominator: 4
+          - number: 2
+            numerator: 4
+            denominator: 4
+          - number: 3
+            numerator: 4
+            denominator: 4
+          - number: 4
+            numerator: 4
+            denominator: 4
+        repetitions: []
