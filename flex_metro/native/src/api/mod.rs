@@ -5,6 +5,7 @@ pub mod fm_ticker_base;       // Core timer functionality
 pub mod fm_bar_element;       // Bar element structures  
 pub mod fm_tempo_interval;    // Tempo interval and sequence structures
 pub mod fm_tempo_sequence_reader; // YAML reader/writer for tempo sequences
+pub mod fm_ticker_publisher;   // Publisher/Subscriber pattern for timer events
 pub mod fm_composition;       // Musical composition structure (independent from tempo)
 pub mod fm_composition_reader; // YAML reader for composition structure
 pub mod composition_demo;     // Demonstration of composition functionality
