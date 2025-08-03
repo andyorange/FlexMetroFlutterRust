@@ -1,0 +1,19 @@
+Sequence:
+  intervals:
+    - Interval:
+        name: "Standard 4/4 Bar"
+        start_tempo_bpm: 120
+        bars:
+          - nom: 4
+            denom: 4
+            nom_secs: 0.0
+            # No beats specified - should use default [1,1,1,1]
+    - Interval:
+        name: "Custom 4/4 Bar"
+        start_tempo_bpm: 120
+        bars:
+          - nom: 4
+            denom: 4
+            nom_secs: 0.0
+            beats: [2,1,1]  # Custom beats - should be included
+  repetitions: []

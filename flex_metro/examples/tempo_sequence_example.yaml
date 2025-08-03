@@ -1,0 +1,56 @@
+Sequence:
+  intervals:
+    - Interval:
+        name: "Allegro Opening"
+        start_tempo_bpm: 120.0
+        bars:
+          - nom: 4
+            denom: 4
+          - nom: 4
+            denom: 4
+          - nom: 4
+            denom: 4
+          - nom: 4
+            denom: 4
+    
+    - Interval:
+        name: "Accelerando Bridge"
+        start_tempo_bpm: 120.0
+        end_tempo_bpm: 140.0
+        bars:
+          - nom: 4
+            denom: 4
+          - nom: 4
+            denom: 4
+    
+    - Interval:
+        name: "Presto Section"
+        start_tempo_bpm: 140.0
+        bars:
+          - nom: 2
+            denom: 4
+          - nom: 2
+            denom: 4
+          - nom: 2
+            denom: 4
+    
+    - Interval:
+        name: "Ritardando Ending"
+        start_tempo_bpm: 140.0
+        end_tempo_bpm: 90.0
+        bars:
+          - nom: 4
+            denom: 4
+          - nom: 4
+            denom: 4
+  
+  repetitions:
+    - Rep:
+        start_interval: 1
+        end_interval: 2
+        NumReps: 2
+    
+    - Rep:
+        start_interval: 3
+        end_interval: 3
+        NumReps: 1

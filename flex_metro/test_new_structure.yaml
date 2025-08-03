@@ -1,0 +1,31 @@
+intervals:
+  - name: "Intro"
+    start_tempo_bpm: 120.0
+    bars:
+      - nom: 4
+        denom: 4
+        nom_secs: 2.0
+  - name: "Verse"
+    start_tempo_bpm: 120.0
+    bars:
+      - nom: 4
+        denom: 4
+        nom_secs: 2.0
+  - name: "Chorus"
+    start_tempo_bpm: 130.0
+    end_tempo_bpm: 135.0
+    bars:
+      - nom: 4
+        denom: 4
+        nom_secs: 1.8
+  - name: "Bridge"
+    start_tempo_bpm: 110.0
+    bars:
+      - nom: 3
+        denom: 4
+        nom_secs: 1.5
+
+repetitions:
+  - start_interval_index: 1
+    end_interval_index: 2
+    num_reps: 2

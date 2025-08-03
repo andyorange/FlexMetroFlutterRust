@@ -214,84 +214,6 @@ impl MusicalTiming {
         Ok(())
     }
 
-    /// Calculate all beat events with their precise timing and tempo changes
-    /// This implementation uses smooth tempo interpolation throughout the entire section
-    fn calculate_beat_events(&mut self, bars: &[FMBarElement]) -> Result<(), String> {
-        self.beat_events.clear();
-        
-        // First, calculate the total number of quarter note units in the section
-        let total_quarter_notes = self.calculate_total_quarter_notes(bars).map_err(|e| format!("Failed to calculate quarter notes: {}", e))?;
-        
-        let mut current_time_ms = 0.0;
-        let mut quarter_note_position = 0.0; // Track position in quarter notes
-
-        for (bar_index, bar) in bars.iter().enumerate() {
-            let beat_groups = self.extract_beats(bar).map_err(|e| format!("Failed to extract beats from bar {}: {}", bar_index, e))?;
-            let quarter_notes_per_bar = if bar.has_signature {
-                (bar.nom as f64 * 4.0) / bar.denom as f64
-            } else {
-                // For time-based bars, estimate based on average tempo
-                let avg_tempo = (self.start_tempo_bpm + self.end_tempo_bpm) / 2.0;
-                let duration_minutes = bar.nom_secs as f64 / 60.0;
-                avg_tempo * duration_minutes
-            };
-            
-            // Calculate the duration of each individual note unit in the bar
-            let total_note_units: i32 = beat_groups.iter().sum();
-            let quarter_notes_per_note_unit = quarter_notes_per_bar / total_note_units as f64;
-            
-            let mut is_first_beat_in_bar = true;
-            let mut absolute_beat_in_bar = 0; // Track absolute beat position in bar
-
-            // Iterate through each beat group
-            for (group_index, &group_size) in beat_groups.iter().enumerate() {
-                // Iterate through each note in this beat group
-                for note_in_group in 0..group_size {
-                    // Calculate section progress for tempo interpolation
-                    let section_progress = quarter_note_position / total_quarter_notes;
-                    let current_tempo = self.start_tempo_bpm + (self.end_tempo_bpm - self.start_tempo_bpm) * section_progress;
-
-                    // Determine beat type dynamically based on position in beat structure
-                    let beat_type = if is_first_beat_in_bar {
-                        BeatType::Major  // First beat of the bar is always Major
-                    } else if note_in_group == 0 && group_index > 0 {
-                        BeatType::Medium // First beat of a group (after the first group) is Medium
-                    } else {
-                        BeatType::Minor  // All other beats are Minor
-                    };
-
-                    // Create beat event
-                    self.beat_events.push(BeatEvent {
-                        time_offset_ms: current_time_ms,
-                        bar_index,
-                        beat_in_bar: group_index,
-                        subbeat_in_beat: absolute_beat_in_bar, // Use absolute position in bar
-                        tempo_bpm: current_tempo,
-                        nom: bar.nom,
-                        denom: bar.denom,
-                        beat_type,
-                    });
-
-                    // Calculate the time duration for this note unit with changing tempo
-                    let note_duration_ms = self.calculate_note_duration_with_tempo_change(
-                        quarter_note_position, 
-                        quarter_notes_per_note_unit, 
-                        total_quarter_notes
-                    );
-                    
-                    // Advance time and quarter note position
-                    current_time_ms += note_duration_ms;
-                    quarter_note_position += quarter_notes_per_note_unit;
-                    absolute_beat_in_bar += 1; // Increment absolute beat position
-                    is_first_beat_in_bar = false;
-                }
-            }
-        }
-
-        self.total_duration_ms = current_time_ms;
-        Ok(())
-    }
-
     /// Convert tempo notation (notes_per_minute, base_note) to BPM for quarter notes
     #[allow(dead_code)]
     fn convert_tempo_to_bpm(&self, notes_per_minute: i32, base_note: i32) -> f64 {
@@ -429,38 +351,6 @@ impl MusicalTiming {
                 0.0
             };
             let tempo_at_t = interval_start_tempo + (interval_end_tempo - interval_start_tempo) * progress;
-            
-            // Duration for this step: (quarter_notes * 60000ms/min) / (quarter_notes/min)
-            let step_duration = (step_size * 60000.0) / tempo_at_t;
-            total_time += step_duration;
-        }
-        
-        total_time
-    }
-
-    /// Calculate the duration of a single note unit with changing tempo
-    /// Uses numerical integration for the portion of the section this note occupies
-    fn calculate_note_duration_with_tempo_change(
-        &self, 
-        start_quarter_note_position: f64, 
-        quarter_notes_in_note: f64,
-        total_quarter_notes: f64
-    ) -> f64 {
-        if (self.end_tempo_bpm - self.start_tempo_bpm).abs() < 1e-6 {
-            // Constant tempo case
-            return (quarter_notes_in_note * 60000.0) / self.start_tempo_bpm;
-        }
-        
-        // For a small segment with linear tempo change:
-        // Use numerical integration with multiple steps for accuracy
-        let num_steps = 10;
-        let step_size = quarter_notes_in_note / num_steps as f64;
-        let mut total_time = 0.0;
-        
-        for i in 0..num_steps {
-            let t = start_quarter_note_position + (i as f64 + 0.5) * step_size;
-            let progress = t / total_quarter_notes;
-            let tempo_at_t = self.start_tempo_bpm + (self.end_tempo_bpm - self.start_tempo_bpm) * progress;
             
             // Duration for this step: (quarter_notes * 60000ms/min) / (quarter_notes/min)
             let step_duration = (step_size * 60000.0) / tempo_at_t;

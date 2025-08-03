@@ -1,0 +1,109 @@
+use crate::api::fm_tempo_sequence_reader::*;
+
+pub fn run_tempo_sequence_demo() {
+    println!("=== FMTempoSequence YAML Demo ===");
+    
+    // Load example tempo sequence from YAML
+    let example_path = "examples/tempo_sequence_example.yaml";
+    
+    match TempoSequenceReader::read_from_file(example_path) {
+        Ok(sequence_with_reps) => {
+            println!("✅ Successfully loaded tempo sequence from YAML");
+            
+            // Display base sequence information
+            println!("\n📊 Base Sequence:");
+            println!("  - {} intervals", sequence_with_reps.sequence.intervals.len());
+            println!("  - {} total bars (base)", sequence_with_reps.sequence.total_bars());
+            
+            // Display intervals
+            for (i, interval) in sequence_with_reps.sequence.intervals.iter().enumerate() {
+                println!("  Interval {}: {}", i + 1, interval.description());
+            }
+            
+            // Display repetitions
+            println!("\n🔄 Repetitions:");
+            if sequence_with_reps.repetitions.is_empty() {
+                println!("  None");
+            } else {
+                for (i, rep) in sequence_with_reps.repetitions.iter().enumerate() {
+                    println!("  Repetition {}: Intervals {}-{} repeated {} times", 
+                             i + 1, 
+                             rep.start_interval + 1, 
+                             rep.end_interval + 1, 
+                             rep.num_repetitions);
+                }
+            }
+            
+            // Generate expanded sequence
+            let expanded = sequence_with_reps.generate_expanded_sequence();
+            println!("\n📈 Expanded Sequence (with repetitions):");
+            println!("  - {} total intervals", expanded.intervals.len());
+            println!("  - {} total bars", expanded.total_bars());
+            
+            // Show expanded interval sequence
+            for (i, interval) in expanded.intervals.iter().enumerate() {
+                println!("  Expanded Interval {}: {}", i + 1, interval.description());
+            }
+            
+            // Test writing back to YAML
+            match TempoSequenceWriter::write_to_string(&sequence_with_reps) {
+                Ok(yaml_output) => {
+                    println!("\n📝 Successfully converted back to YAML:");
+                    println!("{}", yaml_output);
+                },
+                Err(e) => {
+                    println!("❌ Failed to write YAML: {}", e);
+                }
+            }
+        },
+        Err(e) => {
+            println!("❌ Failed to load tempo sequence: {}", e);
+            
+            // Create and demonstrate a simple example
+            println!("\n🔧 Creating a simple example instead:");
+            demonstrate_simple_example();
+        }
+    }
+}
+
+fn demonstrate_simple_example() {
+    use crate::api::fm_tempo_interval::{FMTempoSequence, FMTempoInterval};
+    use crate::api::fm_bar_element::FMBarElement;
+    
+    // Create a simple tempo sequence
+    let mut sequence = FMTempoSequence::new();
+    
+    // Add a simple interval
+    let bars = vec![
+        FMBarElement::new(4, 4, 0.0, None),
+        FMBarElement::new(4, 4, 0.0, None),
+    ];
+    let interval = FMTempoInterval::new(bars, 120.0, Some(130.0), "Accelerando".to_string());
+    sequence.add_interval(interval);
+    
+    // Create sequence with repetitions
+    let mut sequence_with_reps = FMTempoSequenceWithRepetitions::new(sequence);
+    sequence_with_reps.add_repetition(TempoRepetition::new(0, 0, 2));
+    
+    // Convert to YAML
+    match TempoSequenceWriter::write_to_string(&sequence_with_reps) {
+        Ok(yaml_content) => {
+            println!("Generated YAML:");
+            println!("{}", yaml_content);
+            
+            // Test reading it back
+            match TempoSequenceReader::read_from_string(&yaml_content) {
+                Ok(read_back) => {
+                    println!("✅ Round-trip successful!");
+                    println!("Total bars with repetitions: {}", read_back.total_bars_with_repetitions());
+                },
+                Err(e) => {
+                    println!("❌ Round-trip failed: {}", e);
+                }
+            }
+        },
+        Err(e) => {
+            println!("❌ Failed to generate YAML: {}", e);
+        }
+    }
+}

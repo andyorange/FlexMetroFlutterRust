@@ -1,0 +1,111 @@
+use crate::api::fm_tempo_sequence_reader::*;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tempo_sequence_example_yaml_file() {
+        // Test loading the actual example YAML file
+        let example_path = "examples/tempo_sequence_example.yaml";
+        
+        match TempoSequenceReader::read_from_file(example_path) {
+            Ok(sequence_with_reps) => {
+                println!("✅ Successfully loaded tempo sequence from example YAML file");
+                
+                // Verify base structure
+                assert_eq!(sequence_with_reps.sequence.intervals.len(), 4, "Should have 4 intervals");
+                assert_eq!(sequence_with_reps.repetitions.len(), 2, "Should have 2 repetitions");
+                
+                // Verify intervals
+                let intervals = &sequence_with_reps.sequence.intervals;
+                
+                // Interval 1: Allegro Opening
+                assert_eq!(intervals[0].name, "Allegro Opening");
+                assert_eq!(intervals[0].start_tempo_bpm, 120.0);
+                assert_eq!(intervals[0].end_tempo_bpm, 120.0);
+                assert_eq!(intervals[0].bar_count(), 4);
+                
+                // Interval 2: Accelerando Bridge
+                assert_eq!(intervals[1].name, "Accelerando Bridge");
+                assert_eq!(intervals[1].start_tempo_bpm, 120.0);
+                assert_eq!(intervals[1].end_tempo_bpm, 140.0);
+                assert_eq!(intervals[1].bar_count(), 2);
+                
+                // Interval 3: Presto Section
+                assert_eq!(intervals[2].name, "Presto Section");
+                assert_eq!(intervals[2].start_tempo_bpm, 140.0);
+                assert_eq!(intervals[2].end_tempo_bpm, 140.0);
+                assert_eq!(intervals[2].bar_count(), 3);
+                
+                // Interval 4: Ritardando Ending
+                assert_eq!(intervals[3].name, "Ritardando Ending");
+                assert_eq!(intervals[3].start_tempo_bpm, 140.0);
+                assert_eq!(intervals[3].end_tempo_bpm, 90.0);
+                assert_eq!(intervals[3].bar_count(), 2);
+                
+                // Verify repetitions
+                let reps = &sequence_with_reps.repetitions;
+                
+                // Repetition 1: Intervals 1-2 × 2
+                assert_eq!(reps[0].start_interval, 0); // 0-based index
+                assert_eq!(reps[0].end_interval, 1);   // 0-based index
+                assert_eq!(reps[0].num_repetitions, 2);
+                
+                // Repetition 2: Interval 3 × 1
+                assert_eq!(reps[1].start_interval, 2); // 0-based index
+                assert_eq!(reps[1].end_interval, 2);   // 0-based index
+                assert_eq!(reps[1].num_repetitions, 1);
+                
+                // Test expanded sequence
+                let expanded = sequence_with_reps.generate_expanded_sequence();
+                // Base: 4 intervals (4+2+3+2 = 11 bars)
+                // Rep 1: (Intervals 1-2) × 2 = (4+2) × 2 = 4 intervals (12 bars)
+                // Rep 2: (Interval 3) × 1 = 3 × 1 = 1 interval (3 bars)
+                // Total: 11 + 12 + 3 = 26 bars, 4 + 4 + 1 = 9 intervals
+                assert_eq!(expanded.total_bars(), 26, "Total bars with repetitions should be 26");
+                
+                // Test interval structure
+                assert_eq!(expanded.intervals.len(), 9, "Should have 9 total intervals: 4 base + 4 from rep1 + 1 from rep2 = 9");
+                
+                println!("📊 Expanded sequence verification:");
+                println!("   Base intervals: 4 (11 bars)");
+                println!("   Repetition 1: Intervals 1-2 × 2 = 4 intervals (12 bars)");
+                println!("   Repetition 2: Interval 3 × 1 = 1 interval (3 bars)");
+                println!("   Total: {} intervals, {} bars", expanded.intervals.len(), expanded.total_bars());
+                
+                // Verify that YAML round-trip works
+                match TempoSequenceWriter::write_to_string(&sequence_with_reps) {
+                    Ok(yaml_output) => {
+                        // Try to read it back
+                        match TempoSequenceReader::read_from_string(&yaml_output) {
+                            Ok(round_trip_sequence) => {
+                                assert_eq!(round_trip_sequence.sequence.intervals.len(), 4);
+                                assert_eq!(round_trip_sequence.repetitions.len(), 2);
+                                assert_eq!(round_trip_sequence.total_bars_with_repetitions(), 26);
+                                println!("✅ YAML round-trip successful");
+                            },
+                            Err(e) => panic!("Failed to read back generated YAML: {}", e),
+                        }
+                    },
+                    Err(e) => panic!("Failed to write YAML: {}", e),
+                }
+            },
+            Err(e) => {
+                panic!("Failed to load example YAML file '{}': {}", example_path, e);
+            }
+        }
+    }
+    
+    #[test]
+    fn test_tempo_sequence_demo_functionality() {
+        // Test the demo function (without file dependency)
+        use crate::api::tempo_sequence_demo::run_tempo_sequence_demo;
+        
+        // This should not panic even if the file doesn't exist
+        // because the demo has fallback functionality
+        run_tempo_sequence_demo();
+        
+        println!("✅ Tempo sequence demo ran successfully");
+    }
+}

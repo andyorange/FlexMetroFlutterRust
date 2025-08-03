@@ -14,6 +14,12 @@ pub struct FMTempoInterval {
     pub end_tempo_bpm: f64,
     /// Name/label for this interval (obligatory)
     pub name: String,
+    /// Repetition ID (0 if not in repetition, otherwise incremental counter starting from 1)
+    pub repetition_id: usize,
+    /// Position within current repetition (0 if not in repetition, otherwise 0-based position)
+    pub position_in_repetition: usize,
+    /// Total number of intervals in the current repetition (0 if not in repetition)
+    pub total_intervals_in_repetition: usize,
 }
 
 impl FMTempoInterval {
@@ -26,7 +32,37 @@ impl FMTempoInterval {
             start_tempo_bpm,
             end_tempo_bpm: end_tempo,
             name,
+            repetition_id: 0,                        // Default: not in repetition
+            position_in_repetition: 0,               // Default: not in repetition
+            total_intervals_in_repetition: 0,        // Default: not in repetition
         }
+    }
+
+    /// Create a new tempo interval as part of a repetition
+    pub fn new_with_repetition(
+        bars: Vec<FMBarElement>, 
+        start_tempo_bpm: f64, 
+        end_tempo_bpm: Option<f64>, 
+        name: String,
+        repetition_id: usize,
+        position_in_repetition: usize,
+        total_intervals_in_repetition: usize
+    ) -> Self {
+        let end_tempo = end_tempo_bpm.unwrap_or(start_tempo_bpm);
+        Self {
+            bars,
+            start_tempo_bpm,
+            end_tempo_bpm: end_tempo,
+            name,
+            repetition_id,
+            position_in_repetition,
+            total_intervals_in_repetition,
+        }
+    }
+
+    /// Check if this interval is part of a repetition
+    pub fn is_in_repetition(&self) -> bool {
+        self.repetition_id > 0
     }
     
     /// Get the total number of bars in this interval
@@ -93,7 +129,7 @@ impl FMTempoSequence {
     }
     
     /// Get the total number of bars across all intervals
-    pub fn total_bar_count(&self) -> usize {
+    pub fn total_bars(&self) -> usize {
         self.intervals.iter().map(|i| i.bar_count()).sum()
     }
     
@@ -128,7 +164,7 @@ impl FMTempoSequence {
         
         format!("Tempo Sequence ({} intervals, {} bars total):\n{}", 
                 self.interval_count(), 
-                self.total_bar_count(),
+                self.total_bars(),
                 parts.join("\n"))
     }
 }

@@ -79,6 +79,25 @@ impl FMBarElement {
             has_signature,
         }
     }
+
+    /// Check if this bar element is using the default beat pattern
+    pub fn is_using_default_beats(&self) -> bool {
+        if !self.has_signature {
+            return false; // Non-signature based bars don't have defaults
+        }
+
+        match &self.beats {
+            BarBeatData::Int(beats_vec) => {
+                let key = MetricKey::Standard((self.nom, self.denom));
+                if let Some(default_beats) = DEFAULT_BEATS.get(&key) {
+                    beats_vec == default_beats
+                } else {
+                    false // No default pattern exists
+                }
+            },
+            BarBeatData::Float(_) => false, // Float beats are never defaults
+        }
+    }
 }
 
 #[cfg(test)]
@@ -132,5 +151,20 @@ mod tests {
             },
             _ => panic!("Expected Float beats for non-signature-based measure"),
         }
+    }
+
+    #[test]
+    fn test_is_using_default_beats() {
+        // Test 4/4 time with default beats [2, 2]
+        let default_bar = FMBarElement::new(4, 4, 0.0, None);
+        assert!(default_bar.is_using_default_beats(), "Should detect default 4/4 beats");
+        
+        // Test 4/4 time with custom beats
+        let custom_bar = FMBarElement::new(4, 4, 0.0, Some(vec![2, 1, 1]));
+        assert!(!custom_bar.is_using_default_beats(), "Should detect custom 4/4 beats");
+        
+        // Test non-signature based bar (time-based)
+        let time_bar = FMBarElement::new(0, 0, 2.5, Some(vec![1, 2, 3]));
+        assert!(!time_bar.is_using_default_beats(), "Time-based bars don't have defaults");
     }
 }

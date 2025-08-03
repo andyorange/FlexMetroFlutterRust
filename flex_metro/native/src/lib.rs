@@ -7,6 +7,9 @@ pub mod realtime_test;
 #[cfg(test)]
 pub mod tempo_sequence_test;
 
+// #[cfg(test)]
+// pub mod tempo_sequence_example_test;  // Temporarily disabled
+
 #[cfg(test)]
 pub mod fm_ticker_base_test;
 

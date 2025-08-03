@@ -1,0 +1,32 @@
+Sequence:
+  - Interval:
+      name: "Solo Start"
+      start_tempo_bpm: 90
+      end_tempo_bpm: 120
+      bars:
+        - nom: 4
+          denom: 4
+          nom_secs: 0.0
+  - Repetition:
+      NumReps: 3
+      - Interval:
+          name: "First in Repetition"
+          start_tempo_bpm: 120
+          bars:
+            - nom: 4
+              denom: 4
+              nom_secs: 0.0
+      - Interval:
+          name: "Second in Repetition"
+          start_tempo_bpm: 130
+          bars:
+            - nom: 3
+              denom: 4
+              nom_secs: 0.0
+  - Interval:
+      name: "Solo End"
+      start_tempo_bpm: 140
+      bars:
+        - nom: 2
+          denom: 4
+          nom_secs: 0.0

@@ -482,9 +482,13 @@ impl<'a> BarReference<'a> {
         self.bar_ranges.keys().cloned().collect()
     }
     
-    /// Get the total number of bars in the composition
+    /// Get the total number of bars efficiently using the highest bar range
+    /// This is more efficient than recalculating from the composition
     pub fn total_bars(&self) -> usize {
-        self.composition.total_bar_count()
+        self.bar_ranges.keys()
+            .map(|(_, end_bar)| *end_bar)
+            .max()
+            .unwrap_or(0)
     }
     
     /// Get a reference to the underlying composition

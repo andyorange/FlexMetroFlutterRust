@@ -55,7 +55,7 @@ mod tempo_sequence_tests {
         
         // Verify sequence properties
         assert_eq!(sequence.interval_count(), 3);
-        assert_eq!(sequence.total_bar_count(), 6);
+        assert_eq!(sequence.total_bars(), 6);
         assert!(!sequence.is_empty());
         
         println!("✅ Tempo sequence creation test passed!");
@@ -219,7 +219,7 @@ mod tempo_sequence_tests {
         println!("\n📊 === Multi-Interval Streaming Results ===");
         println!("🎵 Total beats captured: {}/{}", final_count, expected_beats);
         println!("🎼 Total intervals: {}", sequence.interval_count());
-        println!("📊 Total bars: {}", sequence.total_bar_count());
+        println!("📊 Total bars: {}", sequence.total_bars());
         println!("⏱️  Total real time: {:.1}s", total_elapsed.as_secs_f64());
         println!("🎯 Average beat interval: {:.1}ms", total_elapsed.as_millis() as f64 / final_count as f64);
         
